@@ -1,41 +1,37 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"time"
+	"os"
+	"strings"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func main() {
-	res, err := http.Get("https://api.mercadolibre.com/sites/MLA/search?item_location=lat:-37.122878_-37.066198,lon:-56.885710_-56.827878&category=MLA1468&since=today")
+	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_APITOKEN"))
 	if err != nil {
-		fmt.Println("No response from request")
-	}
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
-	var result Response
-	if err := json.Unmarshal(body, &result); err != nil { // Parse []byte to go struct pointer
-		fmt.Println("Can not unmarshal JSON")
-	}
+	bot.Debug = true
 
-	if result.Paging.Total == 0 {
-		fmt.Println("No hay casas nuevas publicadas hoy :(")
-		return
-	}
+	updateConfig := tgbotapi.NewUpdate(0)
+	updateConfig.Timeout = 30
+	for true {
+		updates := bot.GetUpdatesChan(updateConfig)
+		for update := range updates {
+			if update.Message == nil {
+				continue
+			}
 
-	t := time.Now()
-	hoy := fmt.Sprintf("%02d-%02d-%02d",
-		t.Day(), t.Month(), t.Year())
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "No entiendo!")
 
-	fmt.Println("Estas son las casas encontradas para vos el día de hoy!", hoy)
-	for _, rec := range result.Results {
-		fmt.Println("Link = ", rec.Permalink, "-> Price = USD ", rec.Price)
+			if strings.ToLower(update.Message.Text) == "casas" {
+				msg = tgbotapi.NewMessage(update.Message.Chat.ID, FindHouses())
+			}
+			if _, err := bot.Send(msg); err != nil {
+				panic(err)
+			}
+		}
 	}
 }
